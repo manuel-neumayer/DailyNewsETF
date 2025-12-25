@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily News Vibe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {}
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen pb-20">
+    <!-- Main Container -->
+    <div class="max-w-md mx-auto min-h-screen bg-gray-900">
+        <!-- Header (only shown in Feed view) -->
+        <header id="feedHeader" class="sticky top-0 z-10 bg-gray-900 border-b border-gray-800 pb-2">
+            <div class="px-4 pt-4 pb-2">
+                <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                    Daily News Vibe
+                </h1>
+            </div>
+            
+            <!-- Refresh Button and Filter -->
+            <div class="px-4 mb-2 flex items-center gap-2">
+                <button 
+                    id="refreshBtn"
+                    onclick="refreshNews()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-1.5 px-4 rounded-lg transition-colors duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <svg id="refreshIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span id="refreshText">Refresh</span>
+                </button>
+                <button 
+                    id="filterBtn"
+                    onclick="openFilterModal()"
+                    class="bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-semibold py-1.5 px-3 rounded-lg transition-colors duration-200 flex items-center gap-2"
+                    aria-label="Filter sources"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                    </svg>
+                </button>
+                <p id="refreshStatus" class="text-xs text-gray-500 mt-1 hidden"></p>
+            </div>
+            
+            <!-- Category Tabs (sticky, horizontal scrollable) -->
+            <div class="sticky top-0 bg-gray-900 border-b border-gray-800 overflow-x-auto scrollbar-hide">
+                <div id="categoryTabsContainer" class="flex gap-2 px-4 py-2 min-w-max">
+                    <!-- Category tabs will be rendered dynamically by JavaScript -->
+                </div>
+            </div>
+        </header>
+
+        <!-- Saved View Header -->
+        <header id="savedHeader" class="hidden sticky top-0 z-10 bg-gray-900 border-b border-gray-800">
+            <div class="px-4 pt-4 pb-4">
+                <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                    Saved Articles
+                </h1>
+            </div>
+        </header>
+
+        <!-- Settings View Header -->
+        <header id="settingsHeader" class="hidden sticky top-0 z-10 bg-gray-900 border-b border-gray-800">
+            <div class="px-4 pt-4 pb-4">
+                <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                    Settings
+                </h1>
+            </div>
+        </header>
+
+        <!-- Feed View Content -->
+        <main id="feedView" class="px-4 py-4">
+            <div id="articlesContainer" class="space-y-4">
+                <!-- Articles will be rendered here by JavaScript -->
+            </div>
+            <div id="emptyState" class="text-center py-12 text-gray-500 hidden">
+                <p>No articles found. Click "Refresh" to fetch news!</p>
+            </div>
+        </main>
+
+        <!-- Saved View Content -->
+        <main id="savedView" class="hidden px-4 py-4">
+            <div id="savedArticlesContainer" class="space-y-4">
+                <!-- Saved articles will be rendered here by JavaScript -->
+            </div>
+            <div id="savedEmptyState" class="text-center py-12 text-gray-500 hidden">
+                <p>No saved articles yet. Tap the bookmark icon on any article to save it!</p>
+            </div>
+        </main>
+
+        <!-- Settings View Content -->
+        <main id="settingsView" class="hidden px-4 py-4">
+            <div class="space-y-4">
+                <div class="bg-gray-800 rounded-lg p-4">
+                    <h2 class="text-lg font-semibold mb-2">About</h2>
+                    <p class="text-gray-400 text-sm">Daily News Vibe aggregates news from NYT and Hacker News, categorizing them using AI.</p>
+                </div>
+                
+                <!-- Manage Categories Section -->
+                <div class="bg-gray-800 rounded-lg p-4">
+                    <h2 class="text-lg font-semibold mb-4">Manage Categories</h2>
+                    
+                    <!-- Add Category Form -->
+                    <div class="mb-4 pb-4 border-b border-gray-700">
+                        <div class="flex gap-2 mb-2">
+                            <input 
+                                type="text" 
+                                id="newCategoryName"
+                                placeholder="Category name"
+                                class="flex-1 bg-gray-700 text-gray-100 px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                            <button 
+                                onclick="addCategory()"
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                            >
+                                Add
+                            </button>
+                        </div>
+                        <p id="categoryError" class="text-red-400 text-xs mt-1 hidden"></p>
+                        <p id="categorySuccess" class="text-green-400 text-xs mt-1 hidden"></p>
+                    </div>
+                    
+                    <!-- Categories List -->
+                    <div id="categoriesList" class="space-y-2">
+                        <!-- Categories will be rendered here by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Source Filter Modal -->
+    <div id="filterModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onclick="if(event.target === this) closeFilterModal()">
+        <div class="bg-gray-800 rounded-lg p-6 max-w-sm w-full mx-4 border border-gray-700" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-gray-100">Filter Sources</h2>
+                <button 
+                    onclick="closeFilterModal()"
+                    class="text-gray-400 hover:text-gray-300 transition-colors"
+                    aria-label="Close modal"
+                >
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="filterSourcesList" class="space-y-2 max-h-64 overflow-y-auto">
+                <!-- Source checkboxes will be populated here -->
+            </div>
+            <div class="mt-4 flex gap-2">
+                <button 
+                    onclick="selectAllSources()"
+                    class="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                    Select All
+                </button>
+                <button 
+                    onclick="closeFilterModal()"
+                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-20">
+        <div class="max-w-md mx-auto flex justify-around items-center py-2">
+            <button 
+                id="navFeed"
+                onclick="switchView('feed')"
+                class="nav-item active flex flex-col items-center gap-1 px-4 py-2 text-blue-400 transition-colors"
+            >
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 9h18v10H3V9zm0-6h18v4H3V3z"/>
+                </svg>
+                <span class="text-xs font-medium">Feed</span>
+            </button>
+            <button 
+                id="navSaved"
+                onclick="switchView('saved')"
+                class="nav-item flex flex-col items-center gap-1 px-4 py-2 text-gray-500 transition-colors hover:text-gray-300"
+            >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                </svg>
+                <span class="text-xs font-medium">Saved</span>
+            </button>
+            <button 
+                id="navSettings"
+                onclick="switchView('settings')"
+                class="nav-item flex flex-col items-center gap-1 px-4 py-2 text-gray-500 transition-colors hover:text-gray-300"
+            >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <span class="text-xs font-medium">Settings</span>
+            </button>
+        </div>
+    </nav>
+
+    <script>
+        // Global state
+        let allArticles = {{ articles_json | safe }};
+        let categories = {{ categories_json | safe }};
+        let currentView = 'feed';
+        let currentCategory = 'all';
+        let enabledSources = new Set();
+        let lastVisitTime = null;
+
+        // Format date for display
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            today.setHours(0, 0, 0, 0);
+            yesterday.setHours(0, 0, 0, 0);
+            date.setHours(0, 0, 0, 0);
+            
+            if (date.getTime() === today.getTime()) {
+                return 'Today';
+            } else if (date.getTime() === yesterday.getTime()) {
+                return 'Yesterday';
+            } else {
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+        }
+
+        // Group articles by date
+        function groupArticlesByDate(articles) {
+            const grouped = {};
+            articles.forEach(article => {
+                const dateKey = article.created_at ? article.created_at.split('T')[0] : 'unknown';
+                if (!grouped[dateKey]) {
+                    grouped[dateKey] = [];
+                }
+                grouped[dateKey].push(article);
+            });
+            return grouped;
+        }
+
+        // Check if article is new (created after last visit)
+        function isNewArticle(article) {
+            if (!lastVisitTime || !article.created_at) return false;
+            const articleTime = new Date(article.created_at).getTime();
+            const visitTime = new Date(lastVisitTime).getTime();
+            return articleTime > visitTime;
+        }
+
+        // Render article card
+        function renderArticleCard(article) {
+            const dateStr = formatDate(article.created_at);
+            const bookmarkIcon = article.is_saved 
+                ? '<path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>'
+                : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>';
+            
+            const bookmarkFill = article.is_saved ? 'fill-current' : 'fill-none stroke-current';
+            const isNew = isNewArticle(article);
+            const newIndicator = isNew ? '<span class="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse" aria-label="New article"></span>' : '';
+            
+            return `
+                <article class="bg-gray-800 rounded-lg p-4 border border-gray-700" data-article-id="${article.id}" data-source="${article.source || 'Unknown'}">
+                    <div class="flex items-start gap-3">
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-base font-semibold mb-1.5 line-clamp-2 flex items-center">
+                                ${newIndicator}
+                                <a 
+                                    href="${article.url}" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    class="text-blue-400 hover:text-blue-300 transition-colors"
+                                >
+                                    ${article.title}
+                                </a>
+                            </h3>
+                            ${article.summary ? `<p class="text-gray-400 text-sm mb-2 line-clamp-2">${article.summary.substring(0, 150)}${article.summary.length > 150 ? '...' : ''}</p>` : ''}
+                            <div class="flex items-center gap-2 text-xs text-gray-500">
+                                <span class="bg-gray-700 px-2 py-0.5 rounded">${article.source}</span>
+                                ${article.category ? `<span class="text-gray-600">${article.category}</span>` : ''}
+                            </div>
+                        </div>
+                        <button 
+                            onclick="toggleSaved(${article.id}, this)"
+                            class="flex-shrink-0 p-2 text-gray-400 hover:text-yellow-400 transition-colors"
+                            aria-label="${article.is_saved ? 'Unsave' : 'Save'} article"
+                        >
+                            <svg class="w-5 h-5 ${bookmarkFill}" viewBox="0 0 24 24" stroke-width="2">
+                                ${bookmarkIcon}
+                            </svg>
+                        </button>
+                    </div>
+                </article>
+            `;
+        }
+
+        // Render articles with date separators
+        function renderArticles(articles, containerId) {
+            const container = document.getElementById(containerId);
+            const emptyState = document.getElementById(containerId === 'articlesContainer' ? 'emptyState' : 'savedEmptyState');
+            
+            if (articles.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            
+            emptyState.classList.add('hidden');
+            
+            const grouped = groupArticlesByDate(articles);
+            const sortedDates = Object.keys(grouped).sort((a, b) => {
+                if (a === 'unknown') return 1;
+                if (b === 'unknown') return -1;
+                return new Date(b) - new Date(a);
+            });
+            
+            let html = '';
+            sortedDates.forEach(dateKey => {
+                const dateArticles = grouped[dateKey];
+                const dateLabel = dateKey === 'unknown' ? '' : formatDate(dateKey + 'T00:00:00');
+                
+                if (dateLabel) {
+                    html += `<div class="sticky top-0 bg-gray-900 py-2 z-10"><h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">${dateLabel}</h2></div>`;
+                }
+                
+                dateArticles.forEach(article => {
+                    html += renderArticleCard(article);
+                });
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // Apply source filter to articles
+        function applySourceFilter(articles) {
+            if (enabledSources.size === 0) return articles; // All sources enabled if empty
+            return articles.filter(article => {
+                const source = article.source || 'Unknown';
+                return enabledSources.has(source);
+            });
+        }
+
+        // Update article visibility based on source filter
+        function updateArticleVisibility() {
+            const articles = document.querySelectorAll('[data-source]');
+            articles.forEach(articleEl => {
+                const source = articleEl.getAttribute('data-source');
+                if (enabledSources.size === 0 || enabledSources.has(source)) {
+                    articleEl.style.display = '';
+                } else {
+                    articleEl.style.display = 'none';
+                }
+            });
+        }
+
+        // Render category tabs dynamically
+        function renderCategoryTabs() {
+            const container = document.getElementById('categoryTabsContainer');
+            const categoryNames = categories.map(c => c.name);
+            
+            let html = `
+                <button 
+                    class="category-tab active px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors bg-blue-600 text-white"
+                    data-category="all"
+                    onclick="switchCategory('all')"
+                >
+                    All
+                </button>
+            `;
+            
+            categoryNames.forEach(catName => {
+                html += `
+                    <button 
+                        class="category-tab px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700"
+                        data-category="${catName}"
+                        onclick="switchCategory('${catName}')"
+                    >
+                        ${catName}
+                    </button>
+                `;
+            });
+            
+            html += `
+                <button 
+                    class="category-tab px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    data-category="Other"
+                    onclick="switchCategory('Other')"
+                >
+                    Other
+                </button>
+            `;
+            
+            container.innerHTML = html;
+        }
+
+        // Switch category in Feed view
+        function switchCategory(category) {
+            currentCategory = category;
+            
+            // Update tab styles
+            document.querySelectorAll('.category-tab').forEach(tab => {
+                if (tab.dataset.category === category) {
+                    tab.classList.add('active', 'bg-blue-600', 'text-white');
+                    tab.classList.remove('bg-gray-800', 'text-gray-300');
+                } else {
+                    tab.classList.remove('active', 'bg-blue-600', 'text-white');
+                    tab.classList.add('bg-gray-800', 'text-gray-300');
+                }
+            });
+            
+            // Filter and render articles
+            let filtered = allArticles;
+            if (category !== 'all') {
+                filtered = allArticles.filter(a => {
+                    if (category === 'Other') {
+                        // Get all category names dynamically
+                        const categoryNames = categories.map(c => c.name);
+                        return !a.category || !categoryNames.includes(a.category);
+                    }
+                    return a.category === category;
+                });
+            }
+            
+            // Apply source filter
+            filtered = applySourceFilter(filtered);
+            
+            renderArticles(filtered, 'articlesContainer');
+        }
+
+        // Switch main view (Feed/Saved/Settings)
+        function switchView(view) {
+            currentView = view;
+            
+            // Update navigation styles
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('text-blue-400');
+                item.classList.add('text-gray-500');
+            });
+            
+            const navMap = {
+                'feed': 'navFeed',
+                'saved': 'navSaved',
+                'settings': 'navSettings'
+            };
+            
+            const activeNav = document.getElementById(navMap[view]);
+            activeNav.classList.remove('text-gray-500');
+            activeNav.classList.add('text-blue-400');
+            
+            // Show/hide views
+            document.getElementById('feedView').classList.toggle('hidden', view !== 'feed');
+            document.getElementById('feedHeader').classList.toggle('hidden', view !== 'feed');
+            document.getElementById('savedView').classList.toggle('hidden', view !== 'saved');
+            document.getElementById('savedHeader').classList.toggle('hidden', view !== 'saved');
+            document.getElementById('settingsView').classList.toggle('hidden', view !== 'settings');
+            document.getElementById('settingsHeader').classList.toggle('hidden', view !== 'settings');
+            
+            // Render appropriate content
+            if (view === 'saved') {
+                let savedArticles = allArticles.filter(a => a.is_saved);
+                savedArticles = applySourceFilter(savedArticles);
+                renderArticles(savedArticles, 'savedArticlesContainer');
+            } else if (view === 'feed') {
+                switchCategory(currentCategory);
+            } else if (view === 'settings') {
+                renderCategoriesList();
+            }
+        }
+
+        // Toggle saved status
+        async function toggleSaved(articleId, buttonElement) {
+            try {
+                const response = await fetch(`/api/articles/${articleId}/toggle-saved`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) throw new Error('Failed to toggle saved status');
+                
+                const data = await response.json();
+                
+                // Update local state
+                const article = allArticles.find(a => a.id === articleId);
+                if (article) {
+                    article.is_saved = data.is_saved;
+                }
+                
+                // Update button icon
+                const svg = buttonElement.querySelector('svg');
+                if (data.is_saved) {
+                    svg.classList.remove('fill-none', 'stroke-current');
+                    svg.classList.add('fill-current');
+                    svg.innerHTML = '<path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>';
+                    buttonElement.classList.remove('text-gray-400');
+                    buttonElement.classList.add('text-yellow-400');
+                } else {
+                    svg.classList.remove('fill-current');
+                    svg.classList.add('fill-none', 'stroke-current');
+                    svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>';
+                    buttonElement.classList.remove('text-yellow-400');
+                    buttonElement.classList.add('text-gray-400');
+                }
+                
+                // If in Saved view, refresh it
+                if (currentView === 'saved') {
+                    switchView('saved');
+                }
+            } catch (error) {
+                console.error('Error toggling saved status:', error);
+                alert('Failed to save article. Please try again.');
+            }
+        }
+
+        // Refresh news
+        async function refreshNews() {
+            const btn = document.getElementById('refreshBtn');
+            const icon = document.getElementById('refreshIcon');
+            const text = document.getElementById('refreshText');
+            const status = document.getElementById('refreshStatus');
+            
+            btn.disabled = true;
+            icon.classList.add('animate-spin');
+            text.textContent = 'Refreshing...';
+            status.textContent = 'Fetching and categorizing news...';
+            status.classList.remove('hidden');
+            
+            try {
+                const response = await fetch('/api/refresh', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    status.textContent = 'Refresh started! New articles will appear shortly.';
+                    status.classList.remove('text-gray-500');
+                    status.classList.add('text-green-400');
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } else {
+                    throw new Error(data.message || 'Refresh failed');
+                }
+            } catch (error) {
+                status.textContent = 'Error: ' + error.message;
+                status.classList.remove('text-gray-500');
+                status.classList.add('text-red-400');
+                
+                setTimeout(() => {
+                    btn.disabled = false;
+                    icon.classList.remove('animate-spin');
+                    text.textContent = 'Refresh';
+                    status.classList.add('hidden');
+                }, 3000);
+            }
+        }
+
+        // Source Filter Modal Functions
+        function openFilterModal() {
+            const modal = document.getElementById('filterModal');
+            const sourcesList = document.getElementById('filterSourcesList');
+            
+            // Get unique sources from articles
+            const sources = [...new Set(allArticles.map(a => a.source || 'Unknown'))].sort();
+            
+            // If enabledSources is empty, it means all sources are enabled
+            // So we check all boxes by default
+            const allEnabled = enabledSources.size === 0;
+            
+            // Render checkboxes
+            sourcesList.innerHTML = sources.map(source => {
+                const isChecked = allEnabled || enabledSources.has(source);
+                return `
+                    <label class="flex items-center gap-3 p-2 rounded hover:bg-gray-700 cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            value="${source}"
+                            ${isChecked ? 'checked' : ''}
+                            onchange="toggleSource('${source}', this.checked)"
+                            class="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                        >
+                        <span class="text-gray-300">${source}</span>
+                    </label>
+                `;
+            }).join('');
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closeFilterModal() {
+            document.getElementById('filterModal').classList.add('hidden');
+            // Save preferences to localStorage
+            // If all sources are enabled (empty set), save empty array
+            if (enabledSources.size === 0) {
+                localStorage.removeItem('enabledSources');
+            } else {
+                localStorage.setItem('enabledSources', JSON.stringify([...enabledSources]));
+            }
+            // Re-render current view to apply filters
+            if (currentView === 'feed') {
+                switchCategory(currentCategory);
+            } else if (currentView === 'saved') {
+                switchView('saved');
+            }
+        }
+
+        function toggleSource(source, enabled) {
+            // Get all sources
+            const allSources = [...new Set(allArticles.map(a => a.source || 'Unknown'))];
+            
+            if (enabled) {
+                enabledSources.add(source);
+                // If all sources are now enabled, clear the set (means all enabled)
+                if (enabledSources.size === allSources.length) {
+                    enabledSources.clear();
+                }
+            } else {
+                // If currently all enabled (empty set), populate with all except the one being disabled
+                if (enabledSources.size === 0) {
+                    enabledSources = new Set(allSources.filter(s => s !== source));
+                } else {
+                    enabledSources.delete(source);
+                }
+            }
+            // Immediately update visibility
+            updateArticleVisibility();
+        }
+
+        function selectAllSources() {
+            const checkboxes = document.querySelectorAll('#filterSourcesList input[type="checkbox"]');
+            // Clear set means all enabled
+            enabledSources.clear();
+            checkboxes.forEach(cb => {
+                cb.checked = true;
+            });
+            updateArticleVisibility();
+        }
+
+        // Last Visit Time Management
+        function updateLastVisitTime() {
+            lastVisitTime = new Date().toISOString();
+            localStorage.setItem('last_visit_time', lastVisitTime);
+        }
+
+        // Category Management Functions
+        async function loadCategories() {
+            try {
+                const response = await fetch('/api/categories');
+                const data = await response.json();
+                categories = data.categories;
+                renderCategoryTabs();
+                if (currentView === 'settings') {
+                    renderCategoriesList();
+                }
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        }
+
+        function renderCategoriesList() {
+            const container = document.getElementById('categoriesList');
+            if (categories.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-sm">No categories yet. Add one above!</p>';
+                return;
+            }
+            
+            container.innerHTML = categories.map(cat => `
+                <div class="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
+                    <div class="flex-1">
+                        <h3 class="text-gray-100 font-medium">${cat.name}</h3>
+                        ${cat.description ? `<p class="text-gray-400 text-xs mt-1">${cat.description}</p>` : ''}
+                    </div>
+                    <button 
+                        onclick="deleteCategory(${cat.id}, '${cat.name}')"
+                        class="ml-3 text-red-400 hover:text-red-300 transition-colors p-2"
+                        aria-label="Delete category"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        async function addCategory() {
+            const nameInput = document.getElementById('newCategoryName');
+            const errorMsg = document.getElementById('categoryError');
+            const successMsg = document.getElementById('categorySuccess');
+            const name = nameInput.value.trim();
+            
+            // Clear messages
+            errorMsg.classList.add('hidden');
+            successMsg.classList.add('hidden');
+            
+            if (!name) {
+                errorMsg.textContent = 'Category name is required';
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/categories', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        description: ''
+                    })
+                });
+                
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.detail || 'Failed to create category');
+                }
+                
+                const newCategory = await response.json();
+                categories.push(newCategory);
+                nameInput.value = '';
+                
+                successMsg.textContent = `Category "${name}" added successfully!`;
+                successMsg.classList.remove('hidden');
+                
+                // Update UI
+                renderCategoryTabs();
+                renderCategoriesList();
+                
+                // Clear success message after 3 seconds
+                setTimeout(() => {
+                    successMsg.classList.add('hidden');
+                }, 3000);
+            } catch (error) {
+                errorMsg.textContent = error.message;
+                errorMsg.classList.remove('hidden');
+            }
+        }
+
+        async function deleteCategory(categoryId, categoryName) {
+            if (!confirm(`Are you sure you want to delete the category "${categoryName}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/categories/${categoryId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.detail || 'Failed to delete category');
+                }
+                
+                // Remove from local array
+                categories = categories.filter(c => c.id !== categoryId);
+                
+                // Update UI
+                renderCategoryTabs();
+                renderCategoriesList();
+                
+                // If we were viewing this category, switch to "All"
+                if (currentCategory === categoryName) {
+                    switchCategory('all');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Parse JSON if it's a string
+            if (typeof allArticles === 'string') {
+                allArticles = JSON.parse(allArticles);
+            }
+            if (typeof categories === 'string') {
+                categories = JSON.parse(categories);
+            }
+            
+            // Ensure is_saved is boolean
+            allArticles = allArticles.map(article => ({
+                ...article,
+                is_saved: article.is_saved === true || article.is_saved === 'true'
+            }));
+            
+            // Load last visit time from localStorage
+            const savedLastVisit = localStorage.getItem('last_visit_time');
+            if (savedLastVisit) {
+                lastVisitTime = savedLastVisit;
+            }
+            
+            // Load source filter preferences
+            const savedSources = localStorage.getItem('enabledSources');
+            if (savedSources) {
+                enabledSources = new Set(JSON.parse(savedSources));
+            } else {
+                // Default: all sources enabled (empty set means all)
+                enabledSources = new Set();
+            }
+            
+            // Render category tabs
+            renderCategoryTabs();
+            
+            // Initial render
+            switchCategory('all');
+            
+            // Update last visit time after 5 seconds
+            setTimeout(() => {
+                updateLastVisitTime();
+            }, 5000);
+        });
+
+        // Update last visit time when leaving the page
+        window.addEventListener('beforeunload', () => {
+            updateLastVisitTime();
+        });
+
+        // Also update on visibility change (tab switch)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                updateLastVisitTime();
+            }
+        });
+    </script>
+
+    <style>
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</body>
+</html>
