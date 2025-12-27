@@ -124,17 +124,17 @@ def seed_sources():
                     "weight": 0.9,
                     "min_score": 0
                 },
-                                {
-                    "name": "The Verge",
-                    "url": "https://www.theverge.com/rss/index.xml",
-                    "category_hint": "tech",
-                    "weight": 1.0,
-                    "min_score": 0
-                },
                 {
                     "name": "Reuters Politics (via Google News)",
                     "url": "https://news.google.com/rss/search?q=site:reuters.com+section:politics&ceid=US:en&hl=en-US&gl=US",
                     "category_hint": "us politics",
+                    "weight": 1.0,
+                    "min_score": 0
+                },
+                {
+                    "name": "Reuters Technology (via Google News)",
+                    "url": "https://news.google.com/rss/search?q=site:reuters.com+section:technology&ceid=US:en&hl=en-US&gl=US",
+                    "category_hint": "tech",
                     "weight": 1.0,
                     "min_score": 0
                 },
@@ -147,7 +147,7 @@ def seed_sources():
                 },
                 {
                     "name": "Axios - Politics",
-                    "url": "https://www.axios.com/feed.xml",
+                    "url": "https://api.axios.com/feed/",
                     "category_hint": "us politics",
                     "weight": 0.8,
                     "min_score": 0

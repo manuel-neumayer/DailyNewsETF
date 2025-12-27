@@ -79,6 +79,103 @@ def map_category_hint_to_category(category_hint: str, db: Session) -> str | None
     
     return None
 
+def strip_html_tags(text: str) -> str:
+    """
+    Strip HTML tags from text using regex.
+    """
+    if not text:
+        return ""
+    return re.sub(r'<[^<]+?>', '', text).strip()
+
+def parse_rss_entry(entry, source: Source) -> dict:
+    """
+    Parse an RSS feed entry and extract title, url, summary, and published date.
+    Implements source-specific parsing logic for different feed formats.
+    """
+    result = {
+        "title": "",
+        "url": "",
+        "summary": "",
+        "published": ""
+    }
+    
+    # Extract title (common for all sources)
+    title = entry.get("title", "").strip()
+    
+    # Source-specific parsing
+    source_url_lower = source.url.lower()
+    
+    # A. ArXiv Feeds
+    if "arxiv.org" in source_url_lower:
+        # Strip "arXiv:XXXX.XXXX" prefix if present
+        title = re.sub(r'^arXiv:\s*\d{4}\.\d{4,5}\s*', '', title)
+        # Clean up newlines
+        title = re.sub(r'\s+', ' ', title).strip()
+        result["title"] = title
+        result["url"] = entry.get("link", "")
+        result["summary"] = entry.get("summary", "") or entry.get("description", "")
+        result["published"] = entry.get("published", "")
+    
+    # B. Hacker News (hnrss.org)
+    elif "hnrss.org" in source_url_lower:
+        result["title"] = title
+        # Use entry.comments if it exists (this is the external link), otherwise use entry.link
+        result["url"] = entry.get("comments", "") or entry.get("link", "")
+        # Extract points and comments from description
+        description = entry.get("description", "") or entry.get("summary", "")
+        points_match = re.search(r'Points:\s*(\d+)', description, re.IGNORECASE)
+        comments_match = re.search(r'#?\s*Comments?:\s*(\d+)', description, re.IGNORECASE)
+        
+        points = points_match.group(1) if points_match else "0"
+        comments = comments_match.group(1) if comments_match else "0"
+        result["summary"] = f"Points: {points} | Comments: {comments}"
+        result["published"] = entry.get("published", "")
+    
+    # C. Google News
+    elif "news.google.com" in source_url_lower:
+        result["title"] = title
+        result["url"] = entry.get("link", "")
+        description = entry.get("description", "") or entry.get("summary", "")
+        
+        # Check if description looks like HTML code
+        if description and ("<" in description and ">" in description):
+            # Strip HTML tags
+            description = strip_html_tags(description)
+            # If still messy or empty, use publication date
+            if not description or len(description) < 10:
+                result["summary"] = entry.get("published", "") or entry.get("pubDate", "")
+            else:
+                result["summary"] = description
+        else:
+            result["summary"] = description
+        result["published"] = entry.get("published", "") or entry.get("pubDate", "")
+    
+    # D. Default / General Fallback
+    else:
+        result["title"] = title
+        result["url"] = entry.get("link", "")
+        
+        # Try multiple fields for summary: summary -> description -> content[0].value
+        summary = ""
+        if entry.get("summary"):
+            summary = entry.get("summary")
+        elif entry.get("description"):
+            summary = entry.get("description")
+        elif entry.get("content") and len(entry.get("content", [])) > 0:
+            summary = entry.get("content")[0].get("value", "")
+        
+        # Strip HTML tags if present
+        summary = strip_html_tags(summary)
+        
+        # Truncate to 500 characters
+        if len(summary) > 500:
+            summary = summary[:500] + "..."
+        
+        result["summary"] = summary
+        result["published"] = entry.get("published", "") or entry.get("pubDate", "")
+    
+    return result
+
 def categorize_headline(headline: str, db: Session) -> str | None:
     """
     Use Gemini to categorize a headline.
@@ -210,13 +307,16 @@ def fetch_feed_articles(source: Source) -> list[dict]:
                 return articles
             
             for entry in feed.entries:
-                title = entry.get("title", "").strip()
+                # Use the new parse_rss_entry helper
+                parsed = parse_rss_entry(entry, source)
+                
+                title = parsed["title"]
                 if not title:
                     continue
                 
-                # Extract score from description/summary for HN feeds
-                description = entry.get("description", "") or entry.get("summary", "")
-                score = extract_score_from_text(description)
+                # Extract score from summary/description for HN feeds
+                summary_text = parsed["summary"] or entry.get("description", "") or entry.get("summary", "")
+                score = extract_score_from_text(summary_text)
                 
                 # Filter by min_score if applicable
                 if source.min_score > 0 and score < source.min_score:
@@ -224,9 +324,9 @@ def fetch_feed_articles(source: Source) -> list[dict]:
                 
                 articles.append({
                     "title": title,
-                    "url": entry.get("link", ""),
-                    "summary": description,
-                    "published": entry.get("published", ""),
+                    "url": parsed["url"],
+                    "summary": parsed["summary"],
+                    "published": parsed["published"],
                     "score": score,
                     "source_id": source.id
                 })
@@ -280,10 +380,11 @@ def scrape_and_save(db: Session):
         url = article.get("url", "").strip()
         
         if not title:
+            print(f"  Skipping article with empty title: {url[:50]}...")
             continue
         
         if not url:
-            # print(f"  Skipping article with empty URL: {title[:50]}...")
+            print(f"  Skipping article with empty URL: {title[:50]}...")
             skipped_count += 1
             continue
         
@@ -300,7 +401,7 @@ def scrape_and_save(db: Session):
         # Get source object
         source = db.query(Source).filter(Source.id == article.get("source_id")).first()
         if not source:
-            # print(f"  Skipping article: source_id {article.get('source_id')} not found")
+            print(f"  Skipping article: source_id {article.get('source_id')} not found")
             skipped_count += 1
             continue
         
